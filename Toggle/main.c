@@ -29,13 +29,11 @@ void processingPeriodTimerCalc(u16 processingPeriod);
 
 int main(void)
 {
-  static u32 callCnt = 0;
   NVIC_PriorityGroupConfig(NVIC_PriorityGroup_3);
   initUart1();   //!настройка UART
   
   while (1)
   {
-    callCnt++;
     encoBlock.encoBlockPerifInitPnt(&encoBlock); //Инициализация периферии процессора
     encoBlock.encoBlockCalcPnt(&encoBlock);      //Расчет скорости и фазы
   }       
@@ -81,14 +79,16 @@ void dataChangePerifReinit(encoBlockStatus *encoBlockPnt){
     break;
   case SERIAL:
     serialModeInit(encoBlockPnt);     //инициализация периферии для обработки энкодера с последовательным иноерфейсом
+    if(encoBlockPnt->baseEncoMotorData.fastSpdUse == USE){
+      encoderAdcInit(encoBlockPnt); //инициализация периферии для обработки аналоговых сигналов sin/cos
+    } 
     break;
   case SIN_COS:
     sinCosDigitModeInit(encoBlockPnt); //инициализация периферии для обработки энкодера sin/cos
+    encoderAdcInit(encoBlockPnt);
     break;
   }
-  if(encoBlockPnt->baseEncoMotorData.fastSpdUse == USE){
-    encoderAdcInit(encoBlockPnt); //инициализация периферии для обработки аналоговых сигналов sin/cos
-  }
+
   encoEmulInit(encoBlockPnt); //Настройка эмулятора энкодера
   indicationInit();           //Настройка светодиодной индикации блока
   // Расчет коэф. фильтра скорости
@@ -115,18 +115,7 @@ void encoBlockPerifInit(encoBlockStatus *encoBlockPnt){
   MCU_TypeDef(encoBlockPnt);  //Считывание ID процессора
   
   /*Если данные энкодера изменились, вызываем переинициализацию периферии*/  
-  if(memcmp(pntToStaticData, pntToBaseData, baseDataLength)){
-//  if(initEncoData.blockType != encoBlockPnt->baseEncoMotorData.blockType ||
-//      initEncoData.bitResolution != encoBlockPnt->baseEncoMotorData.bitResolution ||
-//        initEncoData.encoEmulResol != encoBlockPnt->baseEncoMotorData.encoEmulResol ||
-//          initEncoData.encoResolutionType != encoBlockPnt->baseEncoMotorData.encoResolutionType ||
-//            initEncoData.encoSpdFltrTime != encoBlockPnt->baseEncoMotorData.encoSpdFltrTime || 
-//              initEncoData.fastSpdUse != encoBlockPnt->baseEncoMotorData.fastSpdUse ||
-//                initEncoData.fltStrgLen != encoBlockPnt->baseEncoMotorData.fltStrgLen ||
-//                  initEncoData.polePairsNum != encoBlockPnt->baseEncoMotorData.polePairsNum ||
-//                    initEncoData.pulseResolution != encoBlockPnt->baseEncoMotorData.pulseResolution ||
-//                      initEncoData.serialMode != encoBlockPnt->baseEncoMotorData.serialMode ) {
-    
+  if(memcmp(pntToStaticData, pntToBaseData, baseDataLength)){   
     dataChangePerifReinit(encoBlockPnt);                    //Вызов переиницилизации
     debugTimeMeasTimerInit();  //Настройка отладочного таймера измерения длительности выполнения кода
     memcpy(pntToStaticData, pntToBaseData, baseDataLength); //Сохраняем данные
@@ -189,19 +178,16 @@ void encoBlockCalc(encoBlockStatus *encoBlockPnt){
       
       case INCREMENTAL:
         incrementDataProcessing(encoBlockPnt); //!Расчет скорости инкрементального энкодера 
-      break;
-
+        break;
       case SERIAL:
         serialPosition = serialDataSel(encoBlockPnt); //Позиция в зависимости от типа последовательного протокола
         serialDataProcessing(serialPosition, encoBlockPnt);
-      break; 
-      
+        break; 
       case SIN_COS: 
         sinCosDataProcessing(encoBlockPnt);
-      break;
- 
+        break;
       default:                 
-      break;        
+        break;        
     } 
     encoSpdFlt(encoBlockPnt);
     encoEmulCalc(encoBlockPnt); //расчет частоты эмулятора энкодера
@@ -260,7 +246,7 @@ void debugTimeMeasTimerInit(void)
   NVIC_InitTypeDef NVIC_InitStructure;
   
   RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM7, ENABLE);                      //!тактирование таймера TIM2
-  TIM_TimeBaseStructure.TIM_Period = 0xFFFFUL; //!0xFFFFFFFF - значение после достижения которого будет прерывание по обновлению
+  TIM_TimeBaseStructure.TIM_Period = 0xFFFFUL; //!0xFFFF - значение после достижения которого будет прерывание по обновлению
   TIM_TimeBaseStructure.TIM_Prescaler = 1;
   TIM_TimeBaseStructure.TIM_ClockDivision = 0;
   TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
@@ -269,7 +255,7 @@ void debugTimeMeasTimerInit(void)
 
     /* Enable the TIM7 global Interrupt */         
   NVIC_InitStructure.NVIC_IRQChannel = TIM7_IRQn;
-  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 4;
+  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 7;
   NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
   NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
   NVIC_Init(&NVIC_InitStructure);

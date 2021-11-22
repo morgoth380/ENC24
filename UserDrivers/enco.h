@@ -16,6 +16,8 @@
 #define DC_OFFSET 2048
 #define  MINIMAL_SPD    0.005F/FREQ_BASE
 
+#define SIN_COS_ADC_AMPL 290 //Амплитуда сигналов SIN/COS в отсчетах АЦП
+
 #define f_Filtr(valOld, valNew, Kfiltr) (valOld + ((valNew - valOld) * (1.0F / (1 << Kfiltr))))
 
 /* Exported typedef ----------------------------------------------------------*/
@@ -182,11 +184,11 @@ extern u16 incrSignalErr;
 #define ADCx_INPUT_SIN2_ADC                ADC1
 #define ADCx_INPUT_SIN2_CHANNEL            ADC_Channel_2
 
-#define ADCx_INPUT_COS2_PIN                GPIO_Pin_12                 /* PB.12 */
-#define ADCx_INPUT_COS2_GPIO_PORT          GPIOB                       /* GPIOB */
+#define ADCx_INPUT_COS2_PIN               /* GPIO_Pin_12*/  GPIO_Pin_6               /* PB.12->PA6 */
+#define ADCx_INPUT_COS2_GPIO_PORT          /*GPIOB*/  GPIOA 
 #define ADCx_INPUT_COS2_GPIO_CLK           RCC_AHBPeriph_GPIOB
 #define ADCx_INPUT_COS2_ADC                ADC2
-#define ADCx_INPUT_COS2_CHANNEL            ADC_Channel_13
+#define ADCx_INPUT_COS2_CHANNEL            /*ADC_Channel_13*/ADC_Channel_3
 
 #define ADC1_DMA_CHANNEL                   DMA1_Channel1
 #define ADC34_DMA_CHANNEL                  DMA2_Channel5
@@ -328,6 +330,7 @@ typedef enum{
 
 typedef struct {
   calculatedDataType calculatedData;
+  u32 incrEncoPos;
   float K1SpdFiltr;
   float K2SpdFiltr;
   u16 procStatus;
@@ -367,8 +370,8 @@ typedef struct {
 #define BASE_RESET_PARAMS {NO_SEL, ECN1313, 0, BITS_NUM_PER_TURN, 13, 8192, 0, NOT_USE, 8, 2000}
 #define ANALOG_SIG_RESET_VALS {0, 0, 0, 0}
 
-#define ENCO_BLOCK_STATUS_DEFAULTS {CALC_DATA_RESET_VALS, 0.0F, 0.0F, 0, 0, SCALAR_MODE, 0, 0, 0, 0, AUTO_SPD_PHASING, \
-        BASE_RESET_PARAMS, ANALOG_SIG_RESET_VALS, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,\
+#define ENCO_BLOCK_STATUS_DEFAULTS {CALC_DATA_RESET_VALS, 0, 0.0F, 0.0F, 0, 0, SCALAR_MODE, 0, 0, 0, 0, AUTO_SPD_PHASING, \
+        BASE_RESET_PARAMS, ANALOG_SIG_RESET_VALS, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ENCO_EMUL_OFF, 0, 0, 0, 0, 0, 0, 0,\
        (void (*)(u32))encoBlockPerifInit, (void (*)(u32))encoBlockCalc}
 
 

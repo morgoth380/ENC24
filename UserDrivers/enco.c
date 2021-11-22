@@ -19,10 +19,7 @@
 
 ENDAT_SPI_BUFFER EndatSpiData;
 SSI_SPI_BUFFER SSI_SpiData;
-extern u16 debugOvfNum;
 
-u16 impEvent = 0;
-u16 phaseShiftIsPresent;
 __IO uint32_t calibration_value_1 = 0, calibration_value_2 = 0;
 __IO uint32_t calibration_value_3 = 0, calibration_value_4 = 0;
 
@@ -32,9 +29,6 @@ __IO uint32_t ADC34_ValueTab[ADC_SIZE_BUFFER];
 __IO uint16_t *ADC_SIN1, *ADC_COS1, *ADC_SIN2, *ADC_COS2;
 __IO uint16_t *ADC_SIN3, *ADC_COS3, *ADC_SIN4, *ADC_COS4;
 
-
-s32 encoFreq;
-s32 TIM1clockFreq; //!текущая частота тактирования таймера TIM1
 u16 R_signalFlg;
 
 void Delay(__IO uint32_t nTime);
@@ -182,13 +176,10 @@ void EndatSpiInit (void)
   SPI_InitStructure.SPI_Mode = SPI_Mode_Master;
   SPI_Init(SPI1, &SPI_InitStructure);
   
-  /* Configure the Priority Group to 1 bit */                
-  NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2);
-
   /* Configure the SPI interrupt priority */
   
   NVIC_InitStructure.NVIC_IRQChannel = SPI1_IRQn;
-  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0; 
+  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 2; 
   NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
   NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
   NVIC_Init(&NVIC_InitStructure);
@@ -222,78 +213,7 @@ void encoderAdcInit (encoBlockStatus *encoBlockPnt)
   
   
   /* Configure the ADC12 clock */
-  RCC_ADCCLKConfig(RCC_ADC12PLLCLK_Div2);
-  
-  if(encoBlockPnt->MCU_ID_Code == STM32F303xB_Or_C){
-    /* Configure the ADC34 clock */
-    RCC_ADCCLKConfig(RCC_ADC34PLLCLK_Div2);
-    RCC_AHBPeriphClockCmd(RCC_AHBPeriph_ADC34, ENABLE);
-    
-    // Указатели на переменные данных ADC 
-    ADC_SIN3 = (__IO uint16_t *)(&ADC34_ValueTab[0]);         //! 
-    ADC_COS3 = ((__IO uint16_t *)(&ADC34_ValueTab[0])) + 1;   //!
-    ADC_SIN4 = (__IO uint16_t *)(&ADC34_ValueTab[1]);         //!
-    ADC_COS4 = ((__IO uint16_t *)(&ADC34_ValueTab[1])) + 1;   //!
-    
-    //configure ADC3 parameters
-    ADC_StructInit(&ADC_InitStructure); 
-    
-    ADC_VoltageRegulatorCmd(ADC3, ENABLE); 
-    ADC_VoltageRegulatorCmd(ADC4, ENABLE); 
-  
-    /* Insert delay equal to 10 µs */
-    Delay(10);
-    
-    ADC_SelectCalibrationMode(ADC3, ADC_CalibrationMode_Single);
-    ADC_StartCalibration(ADC3);
-
-    ADC_SelectCalibrationMode(ADC4, ADC_CalibrationMode_Single);
-    ADC_StartCalibration(ADC4);
-    
-    while(ADC_GetCalibrationStatus(ADC3) != RESET );
-    calibration_value_3 = ADC_GetCalibrationValue(ADC3);
-
-    while(ADC_GetCalibrationStatus(ADC4) != RESET );
-    calibration_value_4 = ADC_GetCalibrationValue(ADC4);
-    
-    /*--------------------------------------------------------------*/
-    /*                    Настройка АЦП4                            */
-    /*--------------------------------------------------------------*/
-    ADC_CommonInitStructure.ADC_Mode = ADC_Mode_Independent;        //ADC4 работает независимо                                                          
-    ADC_CommonInitStructure.ADC_Clock = ADC_Clock_SynClkModeDiv2;       //      ADC_Clock_AsynClkMode           
-    ADC_CommonInitStructure.ADC_DMAAccessMode = ADC_DMAAccessMode_Disabled;
-    ADC_CommonInitStructure.ADC_DMAMode = ADC_DMAMode_OneShot;
-    ADC_CommonInitStructure.ADC_TwoSamplingDelay = 3;          
-    ADC_CommonInit(ADC4, &ADC_CommonInitStructure);
-
-    ADC_InitStructure.ADC_ContinuousConvMode = ADC_ContinuousConvMode_Enable;  
-    ADC_InitStructure.ADC_Resolution = ADC_Resolution_12b; 
-    
-    ADC_InitStructure.ADC_ExternalTrigConvEvent = ADC_ExternalTrigConvEvent_0;        //!тригер оцифровки от TIM6_TRGO     //ADC_ExternalTrigConvEvent_0 //сигнал начала ицифровки - выход таймера TIM6   
-  
-    ADC_InitStructure.ADC_ExternalTrigEventEdge = ADC_ExternalTrigEventEdge_None;
-    ADC_InitStructure.ADC_DataAlign = ADC_DataAlign_Right;
-    ADC_InitStructure.ADC_OverrunMode = ADC_OverrunMode_Disable;   
-    ADC_InitStructure.ADC_AutoInjMode = ADC_AutoInjec_Disable;  
-    ADC_InitStructure.ADC_NbrOfRegChannel = 1;
-    ADC_Init(ADC4, &ADC_InitStructure);  //ADC4
-    
-    
-    /*--------------------------------------------------------------*/
-    /*                    Настройка АЦП4                      */
-    /*--------------------------------------------------------------*/ 
-    /* ADC1 regular channel7 configuration */ 
-
-    ADC_RegularChannelConfig(ADC4, ADC_Channel_3, 1, ADC_SampleTime_7Cycles5); // ADC4
-    ADC_Cmd(ADC4, ENABLE);  
-    ADC_TempSensorCmd (ADC4, ENABLE);  
-  
-    /* wait for ADC4 ADRDY */
-    while(!ADC_GetFlagStatus(ADC4, ADC_FLAG_RDY));  
-  
-    /* Start ADC4 Software Conversion */ 
-    ADC_StartConversion(ADC4);
-  } 
+  RCC_ADCCLKConfig(RCC_ADC12PLLCLK_Div2); 
   
   /* Enable ADC12 clock */
   RCC_AHBPeriphClockCmd(RCC_AHBPeriph_ADC12, ENABLE);
@@ -325,11 +245,11 @@ void encoderAdcInit (encoBlockStatus *encoBlockPnt)
   GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;
   GPIO_Init(ADCx_INPUT_SIN2_GPIO_PORT, &GPIO_InitStructure);  
 
-  /* Configure ADC12 Channe13 as analog input */
-  GPIO_InitStructure.GPIO_Pin = ADCx_INPUT_COS2_PIN; //!PB12 сигнал B инкрементального сигнала sin/cos
+  /* Configure ADC12 Channe3 as analog input */
+  GPIO_InitStructure.GPIO_Pin = ADCx_INPUT_COS2_PIN; //!PA6 сигнал B инкрементального сигнала sin/cos
   GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AN;
   GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;
-  GPIO_Init(ADCx_INPUT_COS2_GPIO_PORT, &GPIO_InitStructure);  //!PB12 - ADC4_IN3
+  GPIO_Init(ADCx_INPUT_COS2_GPIO_PORT, &GPIO_InitStructure);
   
   // Указатели на переменные данных ADC ---------------------------------------  
   ADC_SIN1 = (__IO uint16_t *)(&ADC1_ValueTab[0]);         //!медленная синусоида   
@@ -362,6 +282,9 @@ void encoderAdcInit (encoBlockStatus *encoBlockPnt)
  
   //configure ADC1 parameters
   ADC_StructInit(&ADC_InitStructure);  
+  
+  Delay(100000); //Отладка
+  
   
   /* Calibration procedure */ 
   ADC_VoltageRegulatorCmd(ADC1, ENABLE);
@@ -574,7 +497,7 @@ void incrementDataProcessing(encoBlockStatus *encoBlockPnt)
   fltDiscrSpeed = encoBlockPnt->spdPhasingParam ? (-fltDiscrSpeed) : fltDiscrSpeed;  //учет фазировки энкодера в скорости
     
   if(R_signalFlg == 1){
-    TIM_SetCounter(TIM2, 0);
+    //TIM_SetCounter(TIM2, 0);
     R_signalFlg = 0;
     encoBlockPnt->RsignalFlg = 1;
     holdTimer = (u16)(R_SIGNAL_HOLD_ITIME * 1000000.0F / encoBlockPnt->encoProcessingPeriod + 0.5F);
@@ -606,7 +529,7 @@ void serialDataProcessing(unsigned long long position, encoBlockStatus *encoBloc
 
   
    encoderPosition = getEnDatEncoderPosition(encoBlockPnt, position);
-   encoderCRC = getEnDatEncoderCRC(position);
+   encoderCRC = getEnDatEncoderCRC(position); 
    crcCalc = EnDatEncoderCRCcalc(encoBlockPnt, encoderPosition, position);
    ThetaMechPU = EnDatEncoderMechPosCalc(encoBlockPnt, encoderPosition); //механическоий угол по enDat
    ThetaElec = EnDatEncoderElecPosCalc(encoBlockPnt, ThetaMechPU);       //электрический угол по enDat
@@ -656,24 +579,7 @@ void sinCosDataProcessing(encoBlockStatus *encoBlockPnt){
     float fltFastSpd;
     float fltSpd;
     float thetaOffset;
-    
-    u16 debugDeltaTime;
-    float debugDeltaTimeF;
-    u32 TIM7val2;
-    static u32 TIM7val1 = 0;
-
-    TIM7val2 = TIM_GetCounter(TIM7);
-    debugDeltaTime = TIM7val2 - TIM7val1 + debugOvfNum * 0xFFFFFFFFUL;
-    debugDeltaTimeF = (u16)(debugDeltaTime * 2.0F / 72 + 0.5F);
-    TIM7val1 = TIM7val2; 
-    debugOvfNum = 0;
-    
-    if((debugDeltaTimeF < 395.0F) && (debugDeltaTimeF > 410.0F)){
-      debugOvfNum++;
-      debugOvfNum--;
-    }
-    
-    
+       
     setBasePhasingDataBeforeStart(encoBlockPnt); //считывание параметров автофазирования из flash-памяти, установка стартового значения счетчика инкрементной фазы
     ThetaMechPU = getDiscrThetaMechPU(encoBlockPnt);            // механическая фаза по инкрементным сигналам
     polePairsNum = encoBlockPnt->baseEncoMotorData.polePairsNum;
@@ -972,8 +878,8 @@ void sinCosDigitModeInit(encoBlockStatus *encoBlockPnt)
   RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE);   //!тактирование таймера TIM3
   
   NVIC_InitStructure.NVIC_IRQChannel = TIM3_IRQn;
-  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
-  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 4;
+  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
   NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
   NVIC_Init(&NVIC_InitStructure);
 
@@ -989,8 +895,8 @@ void sinCosDigitModeInit(encoBlockStatus *encoBlockPnt)
   
   /*Настройка режима захвата таймера TIM1 для обработки АВАРИЙ обрыва инкрементных линий*/
   NVIC_InitStructure.NVIC_IRQChannel = TIM1_CC_IRQn;
-  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 3;
-  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 3;
+  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 4;
+  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
   NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
   NVIC_Init(&NVIC_InitStructure);
   
@@ -1001,7 +907,7 @@ void sinCosDigitModeInit(encoBlockStatus *encoBlockPnt)
   TIM_ICInitStructure.TIM_ICPrescaler = TIM_ICPSC_DIV8;
   TIM_ICInitStructure.TIM_ICFilter = 5;    
   TIM_ICInit(TIM1, &TIM_ICInitStructure);
-  TIM_ITConfig(TIM1, TIM_IT_CC1, ENABLE);
+  TIM_ITConfig(TIM1, TIM_IT_CC1, /*ENABLE*/DISABLE);
   
   //Канал №2
   TIM_ICInitStructure.TIM_Channel = TIM_Channel_2;
@@ -1010,7 +916,7 @@ void sinCosDigitModeInit(encoBlockStatus *encoBlockPnt)
   TIM_ICInitStructure.TIM_ICPrescaler = TIM_ICPSC_DIV8;
   TIM_ICInitStructure.TIM_ICFilter = 5;
   TIM_ICInit(TIM1, &TIM_ICInitStructure);
-  TIM_ITConfig(TIM1, TIM_IT_CC2, ENABLE);
+  TIM_ITConfig(TIM1, TIM_IT_CC2, /*ENABLE*/DISABLE);
   
   /*Настройка режима захвата таймера TIM3*/
   TIM_ICInitStructure.TIM_Channel = TIM_Channel_4;
@@ -1354,15 +1260,15 @@ float getDiscrThetaMechPU(encoBlockStatus *encoBlockPnt)
   blockType = encoBlockPnt->baseEncoMotorData.blockType;
   if(blockType == SIN_COS){
     encoderResolution = RESOLUTION_FACTOR * encoBlockPnt->baseEncoMotorData.pulseResolution;
-    incrementPosCnt = TIM_GetCounter(TIM1); //текущее значение счетчика модуля энкодера
+    incrementPosCnt = encoBlockPnt->incrEncoPos; //текущее значение счетчика модуля энкодера
     incrementPosCnt &= (encoderResolution - 1); //маскирование счетчика
   }else if(blockType == INCREMENTAL){
     encoderResolution = RESOLUTION_FACTOR * encoBlockPnt->baseEncoMotorData.pulseResolution;
-    incrementPosCnt = TIM_GetCounter(TIM2); //текущее значение счетчика модуля энкодера
+    incrementPosCnt = encoBlockPnt->incrEncoPos; //текущее значение счетчика модуля энкодера
     incrementPosCnt = (incrementPosCnt > (encoderResolution - 1)) ? (encoderResolution - 1) : incrementPosCnt;
   }else{ //Serial
     encoderResolution = encoBlockPnt->baseEncoMotorData.pulseResolution;
-    incrementPosCnt = TIM_GetCounter(TIM1); //текущее значение счетчика модуля энкодера
+    incrementPosCnt = encoBlockPnt->incrEncoPos; //текущее значение счетчика модуля энкодера
     incrementPosCnt &= (encoderResolution - 1); //маскирование счетчика
   }
   
@@ -2276,7 +2182,7 @@ uint16_t sinCosEncoErrDetect(encoBlockStatus *encoBlockPnt, float spdVal, float 
   uint16_t errStatus = ENCO_OK;
   errStatus = sinCosEncoderCablesBreakCheck(errStatus, encoBlockPnt);     //Проверка обрыва кабеля энкодера
   errStatus = sinCosEncoderAbsSignalBreakCheck(errStatus, encoBlockPnt);  //Проверка обрыва отдельных сигналов позиции: D и C
-  errStatus = encoderIncrSignalBreakCheck(errStatus, encoBlockPnt);       //Контроль обрыва инкрементных аналоговых сигналов
+  //errStatus = encoderIncrSignalBreakCheck(errStatus, encoBlockPnt);       //Контроль обрыва инкрементных аналоговых сигналов
   errStatus = sinCosRSignalBreakCheck(errStatus, encoBlockPnt, spdVal);   //Проверка отсутствия R-сигнала
   errStatus = encoderIncrSignalLowSpdBreakCheck(errStatus, encoBlockPnt);
   errStatus = (encoBlockPnt->drvMode == VECTOR_MODE) ? checkSinCosPhasingMiss(errStatus, encoBlockPnt, phaseAdd) : errStatus; //Проверка невыполненного низкоуровнего фазирования. Проверка выполняется в векторном режиме
@@ -2457,11 +2363,11 @@ uint16_t encoderIncrSignalBreakCheck(uint16_t encoErrStatus, encoBlockStatus *en
   * @retval статус аварии
   */
 
-#define MIN_SQRT_ALLOW_VAL 0.81 //минимально допустимое значение корня из суммы квадратов sin и cos
-#define MAX_SQRT_ALLOW_VAL 1.50 //максимально допустимое значение корня из суммы квадратов sin и cos
+#define MIN_SQRT_ALLOW_VAL 0.81F //минимально допустимое значение корня из суммы квадратов sin и cos
+#define MAX_SQRT_ALLOW_VAL 1.50F //максимально допустимое значение корня из суммы квадратов sin и cos
 
-#define MIN_SQRT_ALLOW_VAL_INCR 0.5 //минимально допустимое значение корня из суммы квадратов sin и cos
-#define MAX_SQRT_ALLOW_VAL_INCR 1.50 //максимально допустимое значение корня из суммы квадратов sin и cos
+#define MIN_SQRT_ALLOW_VAL_INCR 0.5F //минимально допустимое значение корня из суммы квадратов sin и cos
+#define MAX_SQRT_ALLOW_VAL_INCR 1.50F //максимально допустимое значение корня из суммы квадратов sin и cos
 
 uint16_t sinCosEncoderAbsSignalBreakCheck(int16_t encoStatus, encoBlockStatus *encoBlockPnt){
     uint16_t sinCosErrStatus  = encoStatus;
@@ -2482,10 +2388,9 @@ uint16_t sinCosEncoderAbsSignalBreakCheck(int16_t encoStatus, encoBlockStatus *e
     
     maxSin = (abs(slowSin) > maxSin) ? abs(slowSin) : maxSin;
     maxCos = (abs(slowCos) > maxCos) ? abs(slowCos) : maxCos;
-    
     absPosSignalErr = ENCO_OK;
-    normalizeSin = (float)slowSin / encoBlockPnt->ADC_Amplitude; //нормализованный sin
-    normalizeCos = (float)slowCos / encoBlockPnt->ADC_Amplitude; //нормализованный cos
+    normalizeSin = (float)slowSin / /*encoBlockPnt->ADC_Amplitude*/SIN_COS_ADC_AMPL; //нормализованный sin
+    normalizeCos = (float)slowCos / /*encoBlockPnt->ADC_Amplitude*/SIN_COS_ADC_AMPL; //нормализованный cos
     tmp = powf(normalizeSin, 2) + powf(normalizeCos, 2); //сумма  квадратов абсолютных сигналов sin и cos
     sqrtVal = sqrtf(tmp);
 
@@ -2644,13 +2549,10 @@ void SSISpiInit(void){
   SPI_InitStructure.SPI_Mode = SPI_Mode_Master;
   SPI_Init(SPI1, &SPI_InitStructure);
   
-  /* Configure the Priority Group to 1 bit */                
-  NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2);
-
   /* Configure the SPI interrupt priority */
   
   NVIC_InitStructure.NVIC_IRQChannel = SPI1_IRQn;
-  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0; 
+  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 2; 
   NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
   NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
   NVIC_Init(&NVIC_InitStructure);
@@ -2778,8 +2680,8 @@ uint16_t encoderIncrSignalLowSpdBreakCheck(uint16_t encoErrStatus, encoBlockStat
     float sqrtVal;
     float maxSpd;
     s16 fastSin, fastCos;
-    static float maxSqrtVal = 0;
-    static float minSqrtVal = 1.0;
+    static float maxSqrtVal = 0.0F;
+    static float minSqrtVal = 1.0F;
     
     fastSin = encoBlockPnt->analogSignals.fastSin;
     fastCos = encoBlockPnt->analogSignals.fastCos;
@@ -2789,8 +2691,8 @@ uint16_t encoderIncrSignalLowSpdBreakCheck(uint16_t encoErrStatus, encoBlockStat
     }
     
     incrPosSignalErr = ENCO_OK;
-    normalizeSin = (float)fastSin / encoBlockPnt->ADC_Amplitude; //нормализованный sin
-    normalizeCos = (float)fastCos / encoBlockPnt->ADC_Amplitude; //нормализованный cos
+    normalizeSin = (float)fastSin / SIN_COS_ADC_AMPL/*encoBlockPnt->ADC_Amplitude*/; //нормализованный sin
+    normalizeCos = (float)fastCos / SIN_COS_ADC_AMPL/*encoBlockPnt->ADC_Amplitude*/; //нормализованный cos
     tmp = powf(normalizeSin, 2) + powf(normalizeCos, 2); //сумма  квадратов инкрементных сигналов sin и cos
     sqrtVal = sqrtf(tmp);
     

@@ -48,13 +48,10 @@
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
 extern __IO uint16_t *ADC_SIN1, *ADC_COS1, *ADC_SIN2, *ADC_COS2;
-extern s32 encoFreq;
-extern s32  TIM1clockFreq;
 extern u16 glowErrState;
 extern u16 R_signalFlg;
 u16 debugOvfNum;
-s16 incrementPosCnt = 0;     //счетчик инкрементных сигналов энкодера
-extern u16 usartInterruptFlg;
+u16 queryStatus = 0;
   
 /* Private function prototypes -----------------------------------------------*/
 void enDatIT_Pocessing(void);
@@ -62,7 +59,6 @@ void SSI_IT_Pocessing(void);
 u16 getRxDataSize(encoBlockStatus *encoBlockPnt);
 void getAnalogSignals(encoBlockStatus *encoBlockPnt);
 void serialDataQuery(encoBlockStatus *encoBlockPnt);
-void dataTransferSynhr(encoBlockStatus *encoBlockPnt);
 /* Private functions ---------------------------------------------------------*/
 
 extern ENDAT_SPI_BUFFER EndatSpiData;  
@@ -198,18 +194,20 @@ void TIM6_DAC_IRQHandler(void){
   if (TIM_GetITStatus(TIM6, TIM_IT_Update) != RESET)
   {
     TIM_ClearITPendingBit(TIM6, TIM_IT_Update);
-     
     switch(blockType){
     case SERIAL:
+      encoBlockPnt->incrEncoPos = TIM_GetCounter(TIM1); //Защелкиваем позицию энкодера
       serialDataQuery(encoBlockPnt);  //Сформировать данные и активировать запрос
       getAnalogSignals(encoBlockPnt); //Считать значения аналоговых сигналов
       break;
     case SIN_COS:
-      getAnalogSignals(encoBlockPnt);        //Считать значения аналоговых сигналов
-      encoBlockPnt->procStatus = DATA_DONE;    // флаг разрешения для main.c
+      encoBlockPnt->incrEncoPos = TIM_GetCounter(TIM1); //Защелкиваем позицию энкодера
+      getAnalogSignals(encoBlockPnt);                   //Считать значения аналоговых сигналов
+      encoBlockPnt->procStatus = DATA_DONE;             //Флаг разрешения для main.c
       break;
     case INCREMENTAL:
-      encoBlockPnt->procStatus = DATA_DONE; //
+      encoBlockPnt->incrEncoPos = TIM_GetCounter(TIM2); //Защелкиваем позицию энкодера
+      encoBlockPnt->procStatus = DATA_DONE;             //Флаг разрешения для main.c
       break;
     }  
   } 
@@ -264,7 +262,7 @@ void SPI1_IRQHandler (void)
    }
  
    if (SPI_I2S_GetITStatus(SPI1, SPI_I2S_IT_TXE) == SET)
-   { 
+   {
      switch (serialMode){
        case ENDAT2_0:
        case ECN1313:
@@ -329,13 +327,7 @@ void TIM3_IRQHandler(void){
     R_Event = 1; //флаг события в обработчик энкодера
     encoBlockPnt->RsignalFlg = 1; //флаг для передачи в логгер
     TIM_ClearITPendingBit(TIM3, TIM_IT_CC4);      //!сбрасываем флаг обновления таймера TIM3
-    return;
   }
-  
-  if (TIM_GetITStatus(TIM3, TIM_IT_Update) != RESET){ //!если обновление таймера TIM3 - период сигнала энкодера слишком велик, едем с частото йполя 0,02 Гц
-     TIM_ClearITPendingBit(TIM3, TIM_IT_Update);      //!сбрасываем флаг обновления таймера TIM3
-     encoFreq = 0;                                    //!время ожидания следующего фронта захвата вышло - вал вращается с частотой, соотв. частоте поля 0,02 Гц - считаем что двигатель остановлен
-  } 
 }
 
 //Таймер для отладки. Измерение периода вызова функции обработки данных энкодера
@@ -524,6 +516,7 @@ void enDatIT_Pocessing(){
          EndatSpiData.PosState = PacketDone; //!теперь можно обрабатывать полученный пакет с учетом ранее сохраненных значениях быстрых сигналов sin/cos
          encoBlockPnt->EndatPosition = EndatSpiData.EndatPosition;   
          encoBlockPnt->procStatus = DATA_DONE;                    // флаг разрешения для main.c   
+         queryStatus = 0;
          break;
 
     case StopMode:                         
@@ -614,27 +607,30 @@ void serialDataQuery(encoBlockStatus *encoBlockPnt){
   blockType = encoBlockPnt->baseEncoMotorData.blockType;
   serialMode = encoBlockPnt->baseEncoMotorData.serialMode;
   
-  if(blockType == SERIAL){
-    switch(serialMode){
-    case ENDAT2_0:
-    case ECN1313:
-    case ECN1325:
-    case SSI_GRAY:
-    case SSI_BIN:
-      EndatSpiData.txSpiCnt++;
-      EndatSpiData.SendCommand = (serialMode == ECN1325) ? 0xE0 : 0x1C;    //!0b0000011100; // Команда запроса
-      EndatSpiData.TxDataSize = 10;             //!Передаем 10 бит запроса
-      EndatSpiData.EndatSpiState = SendRequest; //!Посылаем запрос на чтение данных   
-      EndatSpiData.EndatPosition = 0;           //!Обнулить перед приемом
-      EndatSpiData.RxInd = 0;
-      SSI_SpiData.TxDataSize = 10;              //!Передаем 10 бит запроса
-      SSI_SpiData.SsiSpiState = SsiSendRequest; //!Посылаем запрос на чтение данных   
-      SSI_SpiData.SSIPosition = 0;              //!Обнулить перед приемом
-      SSI_SpiData.RxInd = 0;
-      EndatSpiData.RxDataSize = getRxDataSize(encoBlockPnt);  //Расчет длины считываемых данных
-      SPI_I2S_ITConfig(SPI1, SPI_I2S_IT_TXE, ENABLE); // Запрос на передачу, путем активирования прерывания на передачу
-      encoBlockPnt->queryCnt++; //ДЛЯ ОТЛАДКИ
-      break;
+  if(queryStatus == 0){ //Есди предыдущий запрос выполнен
+    queryStatus = 1;
+    if(blockType == SERIAL){
+      switch(serialMode){
+      case ENDAT2_0:
+      case ECN1313:
+      case ECN1325:
+      case SSI_GRAY:
+      case SSI_BIN:
+        EndatSpiData.txSpiCnt++;
+        EndatSpiData.SendCommand = (serialMode == ECN1325) ? 0xE0 : 0x1C;    //!0b0000011100; // Команда запроса
+        EndatSpiData.TxDataSize = 10;             //!Передаем 10 бит запроса
+        EndatSpiData.EndatSpiState = SendRequest; //!Посылаем запрос на чтение данных   
+        EndatSpiData.EndatPosition = 0;           //!Обнулить перед приемом
+        EndatSpiData.RxInd = 0;
+        SSI_SpiData.TxDataSize = 10;              //!Передаем 10 бит запроса
+        SSI_SpiData.SsiSpiState = SsiSendRequest; //!Посылаем запрос на чтение данных   
+        SSI_SpiData.SSIPosition = 0;              //!Обнулить перед приемом
+        SSI_SpiData.RxInd = 0;
+        EndatSpiData.RxDataSize = getRxDataSize(encoBlockPnt);  //Расчет длины считываемых данных
+        SPI_I2S_ITConfig(SPI1, SPI_I2S_IT_TXE, ENABLE); // Запрос на передачу, путем активирования прерывания на передачу
+        encoBlockPnt->queryCnt++; //ДЛЯ ОТЛАДКИ
+        break;
+      }
     }
   }
 }
@@ -663,38 +659,15 @@ u16 getRxDataSize(encoBlockStatus *encoBlockPnt){
 }
 
 void getAnalogSignals(encoBlockStatus *encoBlockPnt){
-  u16 ADC4Val;
   encoBlockType blockType;
   
   blockType = encoBlockPnt->baseEncoMotorData.blockType;
   encoBlockPnt->analogSignals.fastSin = (*ADC_SIN2 - DC_OFFSET) >> 2;
-  if(encoBlockPnt->MCU_ID_Code == STM32F303xB_Or_C){
-    ADC4Val = ADC_GetConversionValue(ADC4);
-    encoBlockPnt->analogSignals.fastCos = (ADC4Val - DC_OFFSET) >> 2;
-  }else{ //STM32F303C8
-    encoBlockPnt->analogSignals.fastCos = (*ADC_COS2 - DC_OFFSET) >> 2;
-  }
+  encoBlockPnt->analogSignals.fastCos = (*ADC_COS2 - DC_OFFSET) >> 2;
   
   if(blockType == SIN_COS){
      encoBlockPnt->analogSignals.slowSin = (*ADC_SIN1 - DC_OFFSET) >> 2; 
      encoBlockPnt->analogSignals.slowCos = (*ADC_COS1 - DC_OFFSET) >> 2;
-  }
-}
-
-void dataTransferSynhr(encoBlockStatus *encoBlockPnt){
-  u16 encoProcessingPeriod;
-  u32 ARR;
-  static u16 numCall = 1;
-  
-  encoProcessingPeriod = encoBlockPnt->encoProcessingPeriod;
-  if (numCall == 1){                                                                    //!Если прерывание было вызвано после запуска в прерывании от UART (то есть таймер был запущен после передачи данных в верхний МК)
-     ARR =  (SystemCoreClock / 1000000UL) * encoProcessingPeriod / (TIM6->PSC + 1);                                                                 
-     TIM_SetAutoreload(TIM6, ARR); //7500//; //!то перенастраиваем таймер на интервал 200 мкс
-     numCall = 2;
-  }else{
-     numCall = 1;
-     TIM_Cmd(TIM6, DISABLE);
-     TIM_SetCounter(TIM6, 0);
   }
 }
 

@@ -123,6 +123,7 @@ void USART1_IRQHandler(void)
       }else if(CrcRx == Crc){
                 
         errIndGlowOff(); //Отключение индикации отсутствия запросов от верхнего уровня
+        
         encoBlockPnt->baseEncoMotorData.serialMode = RxDataPnt->header.bits.serialMode; //Тип последовательного порта
         resolutionMode = RxDataPnt->header.bits.encoResolMode; //Тип разрешения
         if(resolutionMode == BITS_PER_TURN){
@@ -150,7 +151,7 @@ void USART1_IRQHandler(void)
         encoBlockPnt->ADC_Amplitude = RxDataPnt->ADC_Amplitude;                //Амплитудный уровень аналоговых сигналов, в кодах АЦП
         encoBlockPnt->encoEmulMode = (encoEmulModeType)RxDataPnt->header.bits.encoEmulMode;      //Режим эмуляции энкодера
         encoBlockPnt->baseEncoMotorData.encoEmulResol = RxDataPnt->encoEmulResol; //Разрешение эмулятора энкодера 
-        
+      
         processingPeriodTimerCalc(encoBlockPnt->encoProcessingPeriod);
         phasingDoneFlg = phasingDoneFlgDef(encoBlockPnt); //Проверка завершения фазирования по R-сигналу
       }
@@ -289,7 +290,7 @@ void initUart1(void)
         
     // Enable the USART1 Interrupt
     NVIC_InitStructure.NVIC_IRQChannel = USART1_IRQn;
-    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 5;
+    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 3;
     NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
     NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
     NVIC_Init(&NVIC_InitStructure);       
