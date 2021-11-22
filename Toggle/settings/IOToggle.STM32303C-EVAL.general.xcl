@@ -1,0 +1,15 @@
+"C:\Program Files (x86)\IAR Systems\Embedded Workbench7.7\arm\bin\armproc.dll" 
+
+"C:\Program Files (x86)\IAR Systems\Embedded Workbench7.7\arm\bin\armjlink2.dll" 
+
+"E:\PROJECTS\IAR_PROJS\ENC24\169_0\169_0\169_0_161121v3\Toggle\STM32303C-EVAL\Exe\STM32303C-EVAL.out" 
+
+--plugin "C:\Program Files (x86)\IAR Systems\Embedded Workbench7.7\arm\bin\armbat.dll" 
+
+--device_macro "C:\Program Files (x86)\IAR Systems\Embedded Workbench7.7\arm\config\debugger\ST\STM32F3xx.dmac" 
+
+--flash_loader "C:\Program Files (x86)\IAR Systems\Embedded Workbench7.7\arm\config\flashloader\ST\FlashSTM32F3xxxB.board" 
+
+
+
+

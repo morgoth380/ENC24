@@ -1,0 +1,508 @@
+/**
+  ******************************************************************************
+  * @file    GPIO/GPIO_Toggle/stm32f30x_it.c 
+  * @author  MCD Application Team
+  * @version V1.0.0
+  * @date    23-October-2012
+  * @brief   Main Interrupt Service Routines.
+  ******************************************************************************
+  * @attention
+  *
+  * <h2><center>&copy; COPYRIGHT 2012 STMicroelectronics</center></h2>
+  *
+  * Licensed under MCD-ST Liberty SW License Agreement V2, (the "License");
+  * You may not use this file except in compliance with the License.
+  * You may obtain a copy of the License at:
+  *
+  *        http://www.st.com/software_license_agreement_liberty_v2
+  *
+  * Unless required by applicable law or agreed to in writing, software 
+  * distributed under the License is distributed on an "AS IS" BASIS, 
+  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  * See the License for the specific language governing permissions and
+  * limitations under the License.
+  *
+  ******************************************************************************
+  */
+
+/* Includes ------------------------------------------------------------------*/
+#include "stm32f30x_it.h"
+#include "enco.h"
+
+/** @addtogroup STM32F30x_StdPeriph_Examples
+  * @{
+  */
+
+/** @addtogroup GPIO_Toggle
+  * @{
+  */
+
+/* Private typedef -----------------------------------------------------------*/
+/* Private define ------------------------------------------------------------*/
+#define  FIRST_CAPTURE 0  //!Код первого захвата по сигналу энкодера
+#define  DCoffset   2048  //!DC-смещение
+#define  REV_DIR  0x0010
+#define  FMAX         80  //!максимально возможная частота поля
+//#define EACH_PERIOD
+//#define ADC_SIZE_BUFFER         2
+
+/* Private macro -------------------------------------------------------------*/
+/* Private variables ---------------------------------------------------------*/
+
+u16 sinCosCalcEn;
+extern __IO uint16_t *ADC_SIN1, *ADC_COS1, *ADC_SIN2, *ADC_COS2;
+extern unsigned long long queryCnt;
+extern unsigned long long ansverCnt;
+extern s32 encoFreq;
+    
+/* Private function prototypes -----------------------------------------------*/
+/* Private functions ---------------------------------------------------------*/
+
+extern ENDAT_SPI_BUFFER EndatSpiData;  
+//extern __IO uint32_t ADC1_ValueTab[ADC_SIZE_BUFFER];
+/******************************************************************************/
+/*            Cortex-M4 Processor Exceptions Handlers                         */
+/******************************************************************************/
+
+/**
+  * @brief  This function handles NMI exception.
+  * @param  None
+  * @retval None
+  */
+void NMI_Handler(void)
+{
+}
+
+/**
+  * @brief  This function handles Hard Fault exception.
+  * @param  None
+  * @retval None
+  */
+void HardFault_Handler(void)
+{
+  /* Go to infinite loop when Hard Fault exception occurs */
+  while (1)
+  {
+  }
+}
+
+/**
+  * @brief  This function handles Memory Manage exception.
+  * @param  None
+  * @retval None
+  */
+void MemManage_Handler(void)
+{
+  /* Go to infinite loop when Memory Manage exception occurs */
+  while (1)
+  {
+  }
+}
+
+/**
+  * @brief  This function handles Bus Fault exception.
+  * @param  None
+  * @retval None
+  */
+void BusFault_Handler(void)
+{
+  /* Go to infinite loop when Bus Fault exception occurs */
+  while (1)
+  {
+  }
+}
+
+/**
+  * @brief  This function handles Usage Fault exception.
+  * @param  None
+  * @retval None
+  */
+void UsageFault_Handler(void)
+{
+  /* Go to infinite loop when Usage Fault exception occurs */
+  while (1)
+  {
+  }
+}
+
+/**
+  * @brief  This function handles SVCall exception.
+  * @param  None
+  * @retval None
+  */
+void SVC_Handler(void)
+{
+}
+
+/**
+  * @brief  This function handles Debug Monitor exception.
+  * @param  None
+  * @retval None
+  */
+void DebugMon_Handler(void)
+{
+}
+
+/**
+  * @brief  This function handles PendSVC exception.
+  * @param  None
+  * @retval None
+  */
+void PendSV_Handler(void)
+{
+}
+
+/**
+  * @brief  This function handles SysTick Handler.
+  * @param  None
+  * @retval None
+  */
+void SysTick_Handler(void)
+{
+}
+
+/******************************************************************************/
+/*                 STM32F30x Peripherals Interrupt Handlers                   */
+/*  Add here the Interrupt Handler for the used peripheral(s) (PPP), for the  */
+/*  available peripheral interrupt handler's name please refer to the startup */
+/*  file (startup_stm32f30x.s).                                               */
+/******************************************************************************/
+
+/**
+  * @brief  This function handles PPP interrupt request.
+  * @param  None
+  * @retval None
+  */
+/*void PPP_IRQHandler(void)
+{
+}*/
+
+/**
+  * TIMER 6 Interrupt handler
+  */
+void TIM6_DAC_IRQHandler(void){
+  //DMA_InitTypeDef       DMA_InitStructure;
+   
+  if (TIM_GetITStatus(TIM6, TIM_IT_Update) != RESET)
+  {
+    TIM_ClearITPendingBit(TIM6, TIM_IT_Update);
+    
+    // Проверяем, если у нас подключен энкодер EnDat, то формируем пакет запроса
+    if((encoder.EncoderMode == ENDAT_2_0) || (encoder.EncoderMode == ENDAT_2_1)){ 
+        EndatSpiData.SendCommand = 0x1C  /*0xAAA*/;    //!0b0000011100; // Команда запроса
+        EndatSpiData.TxDataSize = 10;       //!Передаем 10 бит запроса
+        EndatSpiData.EndatSpiState = SendRequest; //!Посылаем запрос на чтение данных   
+        EndatSpiData.EndatPosition = 0;     //!Обнулить перед приемом
+        EndatSpiData.RxInd = 0;
+        if (encoder.EncoderMode == ENDAT_2_1) {
+            EndatSpiData.RxDataSize = (NUM_CRC_BITS + NUM_ERR_BITS21 + encoder.BitResolution);  // кол-во бит для Endat2.1
+        } 
+        else if (encoder.EncoderMode == ENDAT_2_2) {
+            EndatSpiData.RxDataSize = (NUM_CRC_BITS + NUM_ERR_BITS22 + encoder.BitResolution);  // кол-во бит для Endat2.2
+        }
+        // Запрос на передачу, путем активирования прерывания на передачу
+        SPI_I2S_ITConfig(SPI1, SPI_I2S_IT_TXE, ENABLE);
+        
+        queryCnt++; //ДЛЯ ОТЛАДКИ
+        encoder.queryCnt++; //ДЛЯ ОТЛАДКИ
+ 
+    }
+    else if (encoder.EncoderMode == Sin_Cos) //!если датчик типа Sin_Cos, то тут просто готовим данные для расчета
+    {             
+      encoder.slowSin = (*ADC_SIN1 - DCoffset) >> 2; 
+      encoder.slowCos = (*ADC_COS1 - DCoffset) >> 2;
+      encoder.fastSin = (*ADC_SIN2 - DCoffset) >> 2;
+      encoder.fastCos = (*ADC_COS2 - DCoffset) >> 2;
+      encoder.sinCosState = SinCosDataRd;               //!флаг готовых для расчета данных 
+      encoder.ProcStatus = DoneData;                    // флаг разрешения для main.c
+    }  
+    else if (encoder.EncoderMode == Increment) { // Если инкрементальный энкодер, просто формируем сигнал на выполнение обработки, но по меткам времени
+           encoder.ProcStatus = DoneData;
+    }
+      
+  }  
+}
+// = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = 
+/**
+  * DMA1 Interrupt handler
+  */
+void DMA1_Channel1_IRQHandler (void)
+{
+  u16  static ttt = 0;
+  
+  if (DMA_GetITStatus (DMA1_FLAG_TC1) != RESET) {
+    ttt ++;
+    //GPIO_WriteBit(GPIOA, GPIO_Pin_12, (ttt & 0x01));
+  }
+    
+}
+// = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = 
+/**
+  * DMA1 Interrupt handler
+  */
+void DMA1_Channel2_IRQHandler (void)
+{
+  u16  static ttt2 = 0;
+  
+  if (DMA_GetITStatus (DMA1_FLAG_TC2) != RESET) {
+    ttt2 ++;
+  }
+}
+// = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = 
+/**
+  * SPI1 Interrupt handler
+  */
+// В size передаем значение от 4 до 16 - сколько реально будем передавать.
+void Set_SPI1_Datasize (u8 size)  
+{  
+    u16  tempReg; 
+    tempReg = SPI1->CR2; 
+    tempReg &= (u16)~SPI_CR2_DS; 
+    tempReg |= ((size-1) << 8); 
+    SPI1->CR2 = tempReg; 
+}
+
+void SPI1_IRQHandler (void)
+{
+ u16  tempReg = 0, i = 0;
+ u16  static maxPing = 0;
+
+ // Проверка Busy
+ if( SPI_I2S_GetFlagStatus(SPI1, SPI_I2S_FLAG_BSY) == SET )   
+          return;
+ 
+ if (SPI_I2S_GetITStatus(SPI1, SPI_I2S_IT_TXE) == SET)
+ {   
+   switch (EndatSpiData.EndatSpiState)
+   {
+      case  SendRequest: // Передаем запрос
+        if (EndatSpiData.TxDataSize) { // Если биты не переданы - здесь не ноль
+          SPI_DATA_DIRECT_WRITE();
+          Set_SPI1_Datasize(EndatSpiData.TxDataSize); // Задаем размер передачи          
+          SPI_I2S_SendData16(SPI1, EndatSpiData.SendCommand);// Передаем данные
+          EndatSpiData.TxDataSize = 0; // Сбросить биты передачи  
+          
+          encoder.fastSin = *ADC_SIN2 - DCoffset;   //!Сохраняем текущие амплитуды быстрых sin/cos сигналов (быстрая синусоида без DC-смещения)
+          encoder.fastCos = *ADC_COS2 - DCoffset;   //!Сохраняем текущие амплитуды быстрых sin/cos сигналов (быстрая косинусоида без DC-смещения)
+        }
+        else {                    
+          EndatSpiData.EndatSpiState = WaitStartBit;          
+          EndatSpiData.RxInd = 0; // Текущее кол-во принятых бит данных                    
+          // Меняем режим работы SPI1
+          Set_SPI1_Datasize(4); // Задаем размер данных на ожидании стартового бита - 4 бита пакет          
+          SPI1->CR1 &= ~(0x03); // Обнуляем CPOL и CPHA
+          SPI1->CR1 |= SPI_CPOL_Low | SPI_CPHA_1Edge;
+          SPI_DATA_DIRECT_READ(); // Переходим на чтение
+          maxPing = 0;
+          tempReg = SPI_I2S_ReceiveData16(SPI1); // Вычитать данные для очистки FIFO - На всякий случай
+          tempReg = SPI_I2S_ReceiveData16(SPI1);
+          tempReg = SPI_I2S_ReceiveData16(SPI1);
+          SPI_SendData8(SPI1, 0x0); // Долбилка тактовых импульсов при ожидании стартового бита 
+        }                   
+        break;  
+        
+        case WaitStartBit: // Ожидаем стартовый бит
+            // Wait busy flag                             
+           tempReg = SPI_ReceiveData8(SPI1); 
+           if ( tempReg != 0) {// Если принят не ноль, значит пришел стартовый бит
+               // Определяем сколько полезных бит мы приняли из принятых 4 бит
+             for (i=4; i>0; i--) {
+               if ( tempReg & (1<<(i-1)) ){ // Проверяем биты от старшего к младшему
+                   EndatSpiData.RxInd = i-1; // Кол-во принятых бит
+                   EndatSpiData.EndatPosition |= (tempReg & 0x000F); // Запоминаем данные
+                   EndatSpiData.EndatPosition &= ~(1<<(i-1)); // Стираем стартовый бит
+               }                  
+             }
+             
+             EndatSpiData.EndatSpiState = ReadFirst12Bit; // Переходим в режим чтения первых 12 бит
+             Set_SPI1_Datasize(12); // Задаем размер данных на чтение первого сегмента 12 бит
+             SPI_I2S_SendData16(SPI1, 0x0); // Долбилка тактовых импульсов               
+           }
+           else {
+              SPI_SendData8(SPI1, 0x0);
+           }           
+           
+           if (++maxPing > 4) EndatSpiData.EndatSpiState = StopMode;
+               
+    
+           break;
+           
+        case ReadFirst12Bit: // Вычитываем данные 12-битного сегмента по Endat 
+            EndatSpiData.EndatPosition <<= 12; // Задвинуть данные на 12 бит влево
+            tempReg = SPI_I2S_ReceiveData16(SPI1);
+            EndatSpiData.EndatPosition |= (tempReg & 0x0FFF);
+            EndatSpiData.RxInd += 12; // ДОбавляем еще 12 бит
+            i = EndatSpiData.RxDataSize - EndatSpiData.RxInd; // Определяем сколько осталось
+            
+            if (i > 12) { // Если размер большой, читаем 12 бит
+              Set_SPI1_Datasize(12); // Задаем размер данных на чтение доп. сегмента 12 бит
+              SPI_I2S_SendData16(SPI1, 0x0); // Долбилка тактовых импульсов                             
+            } 
+            else {
+              // Если ждем короткий пакет, переводим SPI1 в конечный режим работы
+              Set_SPI1_Datasize(i); // Задаем размер конечного сегмента                      
+              SPI_SendData8(SPI1, 0x000); // Долбилка тактовых импульсов 
+              EndatSpiData.EndatSpiState = ReadLastBit;
+            }
+
+            break;
+          
+        case ReadLastBit: // Читаем последние данные
+          i = EndatSpiData.RxDataSize - EndatSpiData.RxInd; // Определяем сколько осталось
+          EndatSpiData.EndatPosition <<= i; // Задвигаем данные влево для оставшихся бит
+          
+          tempReg = SPI_ReceiveData8(SPI1);
+          EndatSpiData.EndatPosition |= (tempReg & ((1<<i)-1));
+          EndatSpiData.RxInd += i; // Добавляем остаток
+          
+           EndatSpiData.EndatSpiState = StopMode;
+           SPI_I2S_ITConfig(SPI1, SPI_I2S_IT_RXNE, DISABLE); 
+           SPI_I2S_ITConfig(SPI1, SPI_I2S_IT_TXE, DISABLE);
+           
+           SPI1->CR1 &= ~(0x03); // Обнуляем CPOL и CPHA
+           SPI1->CR1 |= SPI_CPOL_High | SPI_CPHA_2Edge;  // Задаем протокол передачи CPHA и CPOL
+           EndatSpiData.PosState = PacketDone; //!теперь можно обрабатывать полученный пакет с учетом ранее сохраненных значениях быстрых сигналов sin/cos
+           encoder.ProcStatus = DoneData;                    // флаг разрешения для main.c           
+           ansverCnt++; //! ДЛЯ ОТЛАДКИ. Засчитываем полностью полученный ответ
+           
+          break;
+
+        case StopMode:                         
+           EndatSpiData.EndatSpiState = StopMode;
+           SPI_I2S_ITConfig(SPI1, SPI_I2S_IT_RXNE, DISABLE); 
+           SPI_I2S_ITConfig(SPI1, SPI_I2S_IT_TXE, DISABLE);
+           
+           SPI1->CR1 &= ~(0x03); // Обнуляем CPOL и CPHA
+           SPI1->CR1 |= SPI_CPOL_High | SPI_CPHA_2Edge;  // Задаем протокол передачи CPHA и CPOL
+           
+          break;
+            
+            
+      default:
+          SPI_I2S_ITConfig(SPI1, SPI_I2S_IT_TXE, DISABLE);        
+        break;
+    }
+  }
+ 
+  if (SPI_I2S_GetITStatus(SPI1, SPI_I2S_IT_RXNE) == SET)
+  { 
+    tempReg = (u16)SPI_ReceiveData8(SPI1);
+  }
+  
+}
+// = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = 
+/**
+  * TIMER 2 Interrupt handler
+  */
+
+u32 OvfNum = 0;            //!счетчик событий переполнения таймера
+void TIM2_IRQHandler(void){
+    uint32_t minCapture;
+    u16  IFState = 0;
+    static u16 errCnt = 0;
+    static u32 IC1ReadValue1 = 0; //!переменная для считывания первого захваченного с таймера значения
+    u32 IC1ReadValue2 = 0;        //!переменная для второго захваченного с таймера значения
+    static u16 CaptureNumber = FIRST_CAPTURE;
+    u32 Capture = 0;
+    s16 speedSign = 1;
+  // Собираем все прерывания таймера
+  if (TIM_GetITStatus(TIM2, TIM_IT_Update) != RESET)
+  {
+    OvfNum++;                                   //!засчитываем переполнение таймера
+    TIM_ClearITPendingBit(TIM2, TIM_IT_Update); //!сбрасываем флаг обновления таймера
+    IFState |= TIM_IT_Update;
+  } 
+  
+  if(TIM_GetITStatus(TIM2, TIM_IT_CC1) == SET)  //!если прерывание вызвано по событию захвата (поступил передний фронт сигнала энкодера)
+  {
+    /* Clear TIM1 Capture compare interrupt pending bit */
+    TIM_ClearITPendingBit(TIM2, TIM_IT_CC1);    //!сбрасываем флаг захвата
+    
+    TIM_SetCounter(TIM1, 0);                    //!сброс таймера, при переполнении которого сбросятся показания частоты энкодера
+    TIM_ClearITPendingBit(TIM1, TIM_IT_Update); //!сброс таймера, при переполнении которого сбросятся показания частоты энкодера
+    
+    speedSign = (GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_3)) ? 1 : -1; //!определяем знак скорости (если при захвате на входе А уровень на входе B равен 1 то знак скорости "-")
+    if(CaptureNumber == FIRST_CAPTURE)          //!если это самый первый импульс захвата (например, первый поступивший фронт при старте после включения питания)
+    { 
+      //!сюда попадем только один раз при поступлении самого первого сигнала захвата от энкодера
+      IC1ReadValue1 = TIM_GetCapture1(TIM2);    //!сохраняем текущее захваченное значение
+      CaptureNumber = 1;                        //!запомнили факт считывания первого значения (при посутплении следующего фронта будем считать длительность периода сигнала энкодера)
+      OvfNum = 0;                               //!сбрасываем флаг переполнения
+    }
+    else  //!иначе, это не самый первый захват по сигналу энкодера
+    {
+#ifdef EACH_PERIOD                                          //!если расчитываем скорость по каждому захвату
+      IC1ReadValue2 = TIM_GetCapture1(TIM2);                //!считываем второе захваченное значение 
+      Capture = ((OvfNum * 0xFFFFFFFFUL - IC1ReadValue1) + IC1ReadValue2); //!фактически сколько натикал таймер между двумя событиями захвата
+      IC1ReadValue1 = IC1ReadValue2;                        //!запоминаем текущее захваченное значение для следующего захвата
+      OvfNum = 0;                                           //!сбрасываем флаг переполнения
+      encoFreq = (int32_t) (SystemCoreClock / Capture);     //!расчет частоты сигнала энкодера
+      encoFreq = speedSign * encoFreq;                      //!учет знака скорости
+#else //!для исключения программных действий между захватами
+      IC1ReadValue2 = TIM_GetCapture1(TIM2);                //!считываем второе захваченное значение
+      Capture = ((OvfNum * 0xFFFFFFFFUL - IC1ReadValue1) + IC1ReadValue2); //!фактически сколько натикал таймер между двумя событиями захвата
+      minCapture = (uint32_t)(SystemCoreClock * encoder.PolePairs / (FMAX * encoder.Resolution));
+      if (Capture <= minCapture)     //!если второй захват пришел слишком быстро (быстрее чем он может прийти при максимальной частоте 80 Гц)
+      {
+       errCnt++;                     //!засчитываем ошибку
+       encoder.errCRCcount = errCnt; //!засчитываем ошибку
+      }
+      else //!иначе, второй сигнал захвата пришел через время, большее минимально допустимого, то есть через нормальное
+      { 
+       CaptureNumber = FIRST_CAPTURE;                       //!по следующему фронту запомним 1-е захваченное состояние счетчика                   
+       encoFreq = (int32_t) (SystemCoreClock / Capture);    //!расчет частоты сигнала энкодера
+       encoFreq = speedSign * encoFreq;                     //!учет знака скорости
+       OvfNum = 0;
+      }   
+#endif        
+    }
+  } 
+}
+
+
+//!прерывание обновления таймера TIM3, по которому считываются значения из таймера 2 для подсчета приращения количества импульсов в TIM2
+//!обработчик вызывается только во втором режиме измерения скорости  по показанию инкрементального энкодера
+void TIM3_IRQHandler(void){
+  static u32 ReadValue1;     //!1-e значение, считанное из таймера TIM2, работающего в энкодерном режиме
+         u32 ReadValue2;     //!2-е значение, считанное из таймера TIM2, работающего в энкодерном режиме
+  static u16 CaptureNumber = FIRST_CAPTURE;          //!сначала запомним первое значение, извлеченное из TIM2
+  u32 Capture;
+  s16 speedSign = 1;
+  if (TIM_GetITStatus(TIM3, TIM_IT_Update) != RESET) //!если обновление таймера TIM3 - нужно зафиксировать приращение количества импульсов сигнала энкодера
+  {
+    TIM_ClearITPendingBit(TIM3, TIM_IT_Update);      //!сбрасываем флаг обновления таймера TIM3
+      
+    if ((CaptureNumber == FIRST_CAPTURE) || !encoFreq) //!если это первый захват по прерыванию захвата от таймера TIM3
+    {
+      ReadValue1 = TIM_GetCounter(TIM2);             //!считываем текущее состояние таймера TIM2
+      CaptureNumber = 1;                             //!по следующему прерыванию от TIM3 расчитываем скорость
+      OvfNum = 0;                                    //!сброс счетчика переполнений таймера TIM2, работающего в режиме энкодера
+    }
+    else //!иначе, 1-е значение уже сохранено и теперь имеем второе значение для расчета
+    {
+      ReadValue2 = TIM_GetCounter(TIM2);          //!считываем второе значение счетчика импульсов инкрементального сигнала
+      Capture = ((OvfNum * encoder.Resolution - ReadValue1) + ReadValue2); //!количество импульсов сигнала энкодера между двумя событиями обновления таймера TIM3
+      CaptureNumber = FIRST_CAPTURE;              //!При следующем обновлении таймера TIM3 запомним 1-е значение таймера TIM2
+      encoFreq = Capture * FCALC;                 //!Частота сигнала энкодера - количество импульсов энкодера за интервал подсчета (1/Tcalc = FCALC)
+      speedSign = (TIM2->CR1 & REV_DIR) ? 1 : -1; //!проверка направления вращения
+      encoFreq = encoFreq * speedSign;            //!учет направления вращения
+    }
+  }  
+}
+
+
+
+
+//!Функция, в которой обнуляются показания частоты энкодера. Вызывается
+//!в том случае, когда период сигнала энкодера больше максимально допустимого.
+//!То есть считаем, что мы останове.
+void TIM1_UP_TIM16_IRQHandler(void){
+  
+  if (TIM_GetITStatus(TIM1, TIM_IT_Update) != RESET) //!если обновление таймера TIM3 - нужно зафиксировать приращение количества импульсов сигнала энкодера
+  {
+    TIM_ClearITPendingBit(TIM1, TIM_IT_Update);      //!сбрасываем флаг обновления таймера TIM3
+    encoFreq = 0;                                    //!время ожидания следующего фронта захвата вышло - вал вращается с частотой, соотв. частоте поля 0,02 Гц - считаем что двигатель остановлен
+  }  
+}
+
+/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
