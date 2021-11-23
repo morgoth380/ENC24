@@ -550,7 +550,7 @@ void serialDataProcessing(unsigned long long position, encoBlockStatus *encoBloc
    }else{
      fltSpd = endatFltSpd;
    }
-   encoBlockPnt->encoErr = enDatDataExchangeErrDetect(encoBlockPnt->encoErr, encoBlockPnt, position); //Контроль аварий энкодера
+   encoBlockPnt->encoErr = enDatEncoErrDetect(encoBlockPnt, position);  //Контроль аварий энкодера
    //!Запись расчитанных значений в глобальную структуру энкодера
    encoBlockPnt->calculatedData.incrementModulSpd = fltDiscrSpeed;
    encoBlockPnt->incrModulSpdPhasingStatus = digitSpdSign;
@@ -2164,9 +2164,14 @@ uint16_t enDatEncoErrDetect(encoBlockStatus *encoBlockPnt, unsigned long long po
   
   errStatus = enDatDataExchangeErrDetect(errStatus, encoBlockPnt, position); // Проверка отсутствия обмена по протоколу enDat
   if(encoBlockPnt->baseEncoMotorData.fastSpdUse == USE){
-    errStatus = enDatEncoderIncrSignalBreakCheck(errStatus, encoBlockPnt);
-    errStatus = encoderIncrSignalBreakCheck(errStatus, encoBlockPnt);
+    errStatus = enDatEncoderIncrSignalBreakCheck(errStatus, encoBlockPnt); //Обрыв аналоговых сигналов
+    //С кодом ниже разобраться. Нужно ли это, если есть проверка квадратурности
+    /*
+    errStatus = encoderIncrSignalBreakCheck(errStatus, encoBlockPnt);      //Контроль меандра
     errStatus = fastSinCosSignalFaultDetect(errStatus, encoBlockPnt);
+    */
+    errStatus = encoderIncrSignalLowSpdBreakCheck(errStatus, encoBlockPnt); //Проверка квадратурности
+    
   }
   return(errStatus);
 }
@@ -2312,7 +2317,7 @@ u16 enDatDataExchangeErrDetect(uint16_t encoStatus, encoBlockStatus *encoBlockPn
     enDatErrStatus =(errPresentCnt >= ENDAT_ERR_TIME) ? ENDAT_EXCHANGE_MISS_ERR : enDatErrStatus; //время подтверждения аварии - 1 сек
     //errPresentCnt = ((tmp == 0) && (errPresentCnt)) ? --errPresentCnt : errPresentCnt; //декремент счетчика при отсутствии аварии
     //enDatErrStatus = (errPresentCnt == 0) ? 0 : enDatErrStatus; //если аварии не было в течении времени подтверждения - сброс статуса аварии
-    
+       
     errStatus = enDatErrStatus ? enDatErrStatus : errStatus; 
     return errStatus;
 }
@@ -2682,9 +2687,16 @@ uint16_t encoderIncrSignalLowSpdBreakCheck(uint16_t encoErrStatus, encoBlockStat
     s16 fastSin, fastCos;
     static float maxSqrtVal = 0.0F;
     static float minSqrtVal = 1.0F;
+    static s16 maxSin = 0;
+    static s16 maxCos = 0;
+    
     
     fastSin = encoBlockPnt->analogSignals.fastSin;
     fastCos = encoBlockPnt->analogSignals.fastCos;
+    
+    maxSin = (fastSin > maxSin)? fastSin : maxSin;
+    maxCos = (fastCos > maxCos)? fastCos : maxCos;
+    
     maxSpd = spdModeValCalc(encoBlockPnt);
     if(fabsf(encoBlockPnt->calculatedData.electricSpd) > maxSpd){   
       return(sinCosErrStatus);

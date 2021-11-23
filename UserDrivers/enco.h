@@ -6,6 +6,9 @@
 #define SOFT_VERSION     169
 #define SOFT_SUBVERSION  0
 
+#warning Версия блока расширения задается здесь
+#define BLOCK_VER_1_1 
+
 #define STM32F303xB_Or_C 0x422UL
 #define MCU_IDCODE 0xE0042000UL //адрес FLASH-памяти с ID процессора
 
@@ -14,9 +17,13 @@
 
 #define FREQ_BASE 80.0F
 #define DC_OFFSET 2048
-#define  MINIMAL_SPD    0.005F/FREQ_BASE
+#define MINIMAL_SPD    0.005F/FREQ_BASE
 
-#define SIN_COS_ADC_AMPL 290 //Амплитуда сигналов SIN/COS в отсчетах АЦП
+#ifdef BLOCK_VER_1_1
+  #define SIN_COS_ADC_AMPL 290 //Амплитуда сигналов SIN/COS в отсчетах АЦП
+#else
+  #define SIN_COS_ADC_AMPL 130 //Амплитуда сигналов SIN/COS в отсчетах АЦП
+#endif
 
 #define f_Filtr(valOld, valNew, Kfiltr) (valOld + ((valNew - valOld) * (1.0F / (1 << Kfiltr))))
 
@@ -186,7 +193,7 @@ extern u16 incrSignalErr;
 
 #define ADCx_INPUT_COS2_PIN               /* GPIO_Pin_12*/  GPIO_Pin_6               /* PB.12->PA6 */
 #define ADCx_INPUT_COS2_GPIO_PORT          /*GPIOB*/  GPIOA 
-#define ADCx_INPUT_COS2_GPIO_CLK           RCC_AHBPeriph_GPIOB
+#define ADCx_INPUT_COS2_GPIO_CLK           RCC_AHBPeriph_GPIOA/*RCC_AHBPeriph_GPIOB*/
 #define ADCx_INPUT_COS2_ADC                ADC2
 #define ADCx_INPUT_COS2_CHANNEL            /*ADC_Channel_13*/ADC_Channel_3
 
