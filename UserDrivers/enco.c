@@ -2296,6 +2296,7 @@ u16 enDatDataExchangeErrDetect(uint16_t encoStatus, encoBlockStatus *encoBlockPn
     uint16_t errStatus, tmp;
     uint16_t alarm1;
     uint16_t alarm2;
+    static u16 fltState = 0;
     static uint16_t errPresentCnt = 0;
     static uint16_t enDatErrStatus = 0;
     errStatus = encoStatus;
@@ -2311,12 +2312,34 @@ u16 enDatDataExchangeErrDetect(uint16_t encoStatus, encoBlockStatus *encoBlockPn
         alarm1 = (position >> (bitResolution + NUM_CRC_BITS + 1)) & 0x01;//!бит ошибки err
         break;    
     }
-    tmp = ((alarm1 == 1) || (alarm2 == 1)) ? 1 : tmp; //Авария обмена по протоколу enDat
+    tmp = ((alarm1 == 1) || (alarm2 == 1)) ? 1 : 0; //Авария обмена по протоколу enDat
     //-----Фильтрация аварии-------//
-    errPresentCnt = ((tmp == 1) && (errPresentCnt < ENDAT_ERR_TIME)) ? ++errPresentCnt : errPresentCnt; //счетчик подтверждения аварии обмена
-    enDatErrStatus =(errPresentCnt >= ENDAT_ERR_TIME) ? ENDAT_EXCHANGE_MISS_ERR : enDatErrStatus; //время подтверждения аварии - 1 сек
-    //errPresentCnt = ((tmp == 0) && (errPresentCnt)) ? --errPresentCnt : errPresentCnt; //декремент счетчика при отсутствии аварии
-    //enDatErrStatus = (errPresentCnt == 0) ? 0 : enDatErrStatus; //если аварии не было в течении времени подтверждения - сброс статуса аварии
+    switch(fltState){
+    case 0: //Состояние "Не аварии"
+      enDatErrStatus = 0;
+      if(tmp != 0){
+        if(errPresentCnt >= ENDAT_ERR_TIME){
+          fltState = 1;
+        }else{
+          errPresentCnt++;
+        }
+      }else{
+        errPresentCnt = (errPresentCnt > 0) ? (errPresentCnt - 1) : errPresentCnt;
+      }
+      break;
+    case 1: //Состояние аварии "Нет обмена"
+      enDatErrStatus = ENDAT_EXCHANGE_MISS_ERR;
+      if(tmp == 0){
+        if(errPresentCnt <= 0){
+          fltState = 0;
+        }else{
+          errPresentCnt--;
+        }
+      }else{
+        errPresentCnt = (errPresentCnt < ENDAT_ERR_TIME) ? (errPresentCnt + 1) : errPresentCnt;
+      }
+      break;
+    }
        
     errStatus = enDatErrStatus ? enDatErrStatus : errStatus; 
     return errStatus;
@@ -2633,7 +2656,13 @@ float incrAngleSpdCalc(float discrThetaMechPU, encoBlockStatus *encoBlockPnt)
    return(encoFlt.fltSpeed); //скорость по дискретной фазе
 }
 
-
+/**
+  * @brief  Установка исходного значения таймера-счетчика модуля энкодера по значению фазы, полученной по протоколу EnDat
+            и проверка успешности установки
+  * @param  encoBlockPnt - Указатель на структуру энкодера
+  * @param  encoErrStatus - текущая авария энкодера
+  * @retval статус аварии
+  */
 u16 fastSinCosSignalFaultDetect(u16 encoErrStatus, encoBlockStatus *encoBlockPnt){
    static absIncrementPhasingStateType absIncrementPhasingState = SPD_SIGN_SYNHRO;
    s16 baseIncrementCntVal;
@@ -2703,8 +2732,8 @@ uint16_t encoderIncrSignalLowSpdBreakCheck(uint16_t encoErrStatus, encoBlockStat
     }
     
     incrPosSignalErr = ENCO_OK;
-    normalizeSin = (float)fastSin / SIN_COS_ADC_AMPL/*encoBlockPnt->ADC_Amplitude*/; //нормализованный sin
-    normalizeCos = (float)fastCos / SIN_COS_ADC_AMPL/*encoBlockPnt->ADC_Amplitude*/; //нормализованный cos
+    normalizeSin = (float)fastSin / SIN_COS_ADC_AMPL; //нормализованный sin
+    normalizeCos = (float)fastCos / SIN_COS_ADC_AMPL; //нормализованный cos
     tmp = powf(normalizeSin, 2) + powf(normalizeCos, 2); //сумма  квадратов инкрементных сигналов sin и cos
     sqrtVal = sqrtf(tmp);
     
