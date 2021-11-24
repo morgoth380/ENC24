@@ -283,14 +283,14 @@ void encoderAdcInit (encoBlockStatus *encoBlockPnt)
   //configure ADC1 parameters
   ADC_StructInit(&ADC_InitStructure);  
   
-  Delay(100000); //Отладка
+  Delay(100000);
   
   
-  /* Calibration procedure */ 
+  //Calibration procedure 
   ADC_VoltageRegulatorCmd(ADC1, ENABLE);
   ADC_VoltageRegulatorCmd(ADC2, ENABLE);
   
-  /* Insert delay equal to 10 µs */
+  //Insert delay equal to 10 µs
     Delay(10);
   
    

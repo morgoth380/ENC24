@@ -25,17 +25,19 @@ void Delay(__IO uint32_t nTime);
 void debugTimeMeasTimerInit(void);
 void indicationInit(void);
 void processingPeriodTimerCalc(u16 processingPeriod);
-
+void watchDogInit(void);
 
 int main(void)
 {
   NVIC_PriorityGroupConfig(NVIC_PriorityGroup_3);
-  initUart1();   //!настройка UART
+  initUart1();    //Настройка UART
+  watchDogInit(); //Настройка сторожевого таймера
   
   while (1)
   {
     encoBlock.encoBlockPerifInitPnt(&encoBlock); //Инициализация периферии процессора
     encoBlock.encoBlockCalcPnt(&encoBlock);      //Расчет скорости и фазы
+    IWDG_ReloadCounter();                        //Сброс сторожевого таймера
   }       
 }      
       
@@ -311,5 +313,22 @@ void indicationInit(void)
   TIM_PrescalerConfig(TIM17, prescalerValue, TIM_PSCReloadMode_Immediate);
   
   TIM_Cmd(TIM17, ENABLE); 
+}
+
+/**
+  * @brief  Настройка сторожевого таймера
+  * @param  
+  * @retval 
+  */
+void watchDogInit(void)
+{
+  IWDG_Enable();
+  IWDG_WriteAccessCmd(IWDG_WriteAccess_Enable);
+  IWDG_SetPrescaler(IWDG_Prescaler_4);
+  IWDG_SetReload(1000); //0.1 c
+  while(IWDG_GetFlagStatus(IWDG_FLAG_PVU | IWDG_FLAG_RVU) == SET){
+    ;
+  }
+  IWDG_ReloadCounter();
 }
 
