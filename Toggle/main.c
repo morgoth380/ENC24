@@ -18,6 +18,9 @@
 #include "Global_include.h"
 #include "Global_define.h"
 
+#define WD_CLK 40000U   //Частота тактирования сторожевого таймера, кГц
+#define WD_TIMEOUT 0.1F //Таймаут сторожевого таймера, с
+
 void gpioInit (void);
 void initUart1(void);
 unsigned char DelayMs(void);
@@ -322,11 +325,20 @@ void indicationInit(void)
   */
 void watchDogInit(void)
 {
+  u16 prescalerVals[] = {4, 8, 16, 32, 64, 128, 256};
+  u16 prescaler;
+  u16 reloadVal;
+  
+  prescaler = IWDG_Prescaler_4;
+  
+  //Расчет значения регистра перезагрузки
+  reloadVal = (u16)(WD_TIMEOUT * WD_CLK / prescalerVals[prescaler] + 0.5F) - 1;
+  
   IWDG_Enable();
   IWDG_WriteAccessCmd(IWDG_WriteAccess_Enable);
-  IWDG_SetPrescaler(IWDG_Prescaler_4);
-  IWDG_SetReload(1000); //0.1 c
-  while(IWDG_GetFlagStatus(IWDG_FLAG_PVU | IWDG_FLAG_RVU) == SET){
+  IWDG_SetPrescaler(prescaler);
+  IWDG_SetReload(reloadVal); //0.1 c
+  while(IWDG_GetFlagStatus(IWDG_FLAG_PVU | IWDG_FLAG_RVU | IWDG_FLAG_WVU) == SET){
     ;
   }
   IWDG_ReloadCounter();
