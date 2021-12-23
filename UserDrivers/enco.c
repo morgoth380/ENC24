@@ -122,6 +122,12 @@ u16 CrcEnDat(u16 clocks, u16 endat, u16 alarm1, u16 alarm2, uint32_t highpos, ui
 // SPI_CS   - PA4 (SPI1_NSS)
 void EndatSpiInit (void)
 {
+  static u16 initDone = 0;
+  
+  if(initDone == 1){
+    return;
+  }
+  initDone = 1;
   GPIO_InitTypeDef GPIO_InitStructure;
   SPI_InitTypeDef  SPI_InitStructure; 
   NVIC_InitTypeDef NVIC_InitStructure;
@@ -2013,11 +2019,13 @@ float EnDatEncoderElecPosCalc(encoBlockStatus *encoBlockPnt, float ThetaMechPU){
 float EnDatEncoderMechPosCalc(encoBlockStatus *encoBlockPnt, u32 encoderPosition){
   float fThetaMech;
   float fThetaMechPU;
-  u16 bitResolution;
+  volatile u16 bitResolution;
+  u16 pulseResolution;
   
   bitResolution = encoBlockPnt->baseEncoMotorData.bitResolution;
-  fThetaMech = (2*pi/(1 << bitResolution)) * (encoderPosition);//!Абсолютный итоговый угол (в рад.) в float            
-  fThetaMechPU = fThetaMech/(2*pi);                            //!Относительный итоговый угол в float-формате
+  pulseResolution = encoBlockPnt->baseEncoMotorData.pulseResolution;
+  fThetaMech = (2*pi / pulseResolution) * (encoderPosition);//!Абсолютный итоговый угол (в рад.) в float            
+  fThetaMechPU = fThetaMech / (2*pi);                       //!Относительный итоговый угол в float-формате
  
   return(fThetaMechPU);
 }
@@ -2050,12 +2058,12 @@ float endatEncoSpdCalc(float discrThetaMechPU, encoBlockStatus *encoBlockPnt)
    if(angleDiff > 0.8F) {//при реверсе
       angleDiff -= 1.0F;
    }
-   encoFlt.TmpFltr = encoFlt.TmpFltr +((angleDiff - encoFlt.TmpFltr) * 0.125F);
+   //encoFlt.TmpFltr = encoFlt.TmpFltr +((angleDiff - encoFlt.TmpFltr) * 0.125F);
      // Рассчитываем электрическую скорость с учетом пар полюсов.
    if(encoBlockPnt->PWMOn == 0){
      K = (float)polePairsNum * 1000000.0F / (encoProcessingPeriod * FREQ_BASE * encoFlt.storageLen); 
    }
-   encoFlt.fltSpeed = K * encoFlt.TmpFltr;
+   encoFlt.fltSpeed = K * /*encoFlt.TmpFltr*/angleDiff;
    return(encoFlt.fltSpeed);
 }
 

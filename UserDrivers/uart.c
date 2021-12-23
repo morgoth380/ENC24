@@ -126,20 +126,17 @@ void USART1_IRQHandler(void)
         
         encoBlockPnt->baseEncoMotorData.serialMode = RxDataPnt->header.bits.serialMode; //Тип последовательного порта
         resolutionMode = RxDataPnt->header.bits.encoResolMode; //Тип разрешения
+        encoBlockPnt->baseEncoMotorData.encoResolutionType = resolutionMode;
         if(resolutionMode == BITS_PER_TURN){
-          encoBlockPnt->baseEncoMotorData.pulseResolution = 1 <<  RxDataPnt->bitResolution;
+          encoBlockPnt->baseEncoMotorData.pulseResolution = (u16)((u16)1 << RxDataPnt->bitResolution);
           encoBlockPnt->baseEncoMotorData.bitResolution  = RxDataPnt->bitResolution;
         }else{
           encoBlockPnt->baseEncoMotorData.pulseResolution = RxDataPnt->pulseResolution;
-          encoBlockPnt->baseEncoMotorData.bitResolution = 13;
+          encoBlockPnt->baseEncoMotorData.bitResolution = encoBlockPnt->baseEncoMotorData.bitResolution;
         }
         encoBlockPnt->thetaOffset = RxDataPnt->encoAngleShift;
         encoBlockPnt->baseEncoMotorData.polePairsNum = RxDataPnt->motorPolePairsNum; //Число пар полюсов 
-        encoBlockPnt->encoProcessingPeriod = RxDataPnt->processingPeriod * PERIOD_FACTOR;
-        if (RxDataPnt->angleFltBufNum == 1) {
-            RxDataPnt->angleFltBufNum ++;
-            RxDataPnt->angleFltBufNum --;
-         }
+        encoBlockPnt->encoProcessingPeriod = /*RxDataPnt->processingPeriod * PERIOD_FACTOR*/400;
         encoBlockPnt->baseEncoMotorData.fltStrgLen = encoBlockPnt->fltStrgLen = RxDataPnt->angleFltBufNum;  //Размер буфера фильтрации фазы
         encoBlockPnt->baseEncoMotorData.encoSpdFltrTime = encoBlockPnt->encoSpdFltrTime = RxDataPnt->spdFltTime * 100;         //Время фильтрации скорости
         encoBlockPnt->spdPhasingParam = RxDataPnt->header.bits.spdPhasingSign; //Фазировка энкодера

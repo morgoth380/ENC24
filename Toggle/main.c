@@ -133,14 +133,17 @@ void encoBlockPerifInit(encoBlockStatus *encoBlockPnt){
   * @retval
   */
 void encoSpdFlt(encoBlockStatus *encoBlockPnt){
-  float electricSpd;
+  static float electricSpd = 0.0F;
   float shadowSpeedElectric;
   
-  if (isnan(encoBlockPnt->calculatedData.electricSpd)){
-    encoBlockPnt->calculatedData.electricSpd = 0;
+  if (isnan(/*encoBlockPnt->calculatedData.electricSpd*/electricSpd)){
+    /*encoBlockPnt->calculatedData.electricSpd = 0*/electricSpd = 0.0F;
+  }
+  if(isinf(electricSpd)){
+    electricSpd = 0.0F;
   }
   
-  electricSpd = encoBlockPnt->calculatedData.electricSpd;
+  //electricSpd = encoBlockPnt->calculatedData.electricSpd;
   shadowSpeedElectric = encoBlockPnt->calculatedData.shadowSpeedElectric;
     
   // ФНЧ первого порядка с учетом времени дискретизации.
