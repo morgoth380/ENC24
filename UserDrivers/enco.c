@@ -2806,10 +2806,11 @@ int32_t fastSpdSignDef(encoBlockStatus *encoBlockPnt, int32_t autoFastSpdSign){
 #define PWM_FREQ_FACTOR     2    //коэффициент, учитывающий зависимость частоты генерируемого сигнала от частоты "пилы" 
 
 void encoEmulInit(encoBlockStatus *encoBlockPnt){
-  
+  static u16 BDTRflg = 0;
   GPIO_InitTypeDef GPIO_InitStructure; //!Структура для настройки портов
   TIM_OCInitTypeDef TIM_OCInitStruct;
   TIM_TypeDef* encoEmulTIM = TIM15;
+  TIM_BDTRInitTypeDef TIM_BDTRInitStruct;
   RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOB, ENABLE); //!тактирование порта B
   
   //Настройка пина PB14 Выход А эмулятора энкодера
@@ -2834,7 +2835,7 @@ void encoEmulInit(encoBlockStatus *encoBlockPnt){
   RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM15, ENABLE); //Тактирование таймера 15
   
   TIM_OCInitStruct.TIM_OCMode = TIM_OCMode_PWM1; //Пин в режиме выхода, переключение по совпадению
-  TIM_OCInitStruct.TIM_OutputState = TIM_OutputState_Disable; //Разрешение выхода (CC1E = 0)
+  TIM_OCInitStruct.TIM_OutputState = TIM_OutputState_Enable; //Разрешение выхода (CC1E = 0)
   TIM_OCInitStruct.TIM_OutputNState = TIM_OutputNState_Disable; //комплиментарный режим запрещен
   TIM_OCInitStruct.TIM_Pulse = 0; //Значение регистра сравнения
   TIM_OCInitStruct.TIM_OCPolarity = TIM_OCPolarity_High;       //Исходное состояние до совпадения
@@ -2845,7 +2846,7 @@ void encoEmulInit(encoBlockStatus *encoBlockPnt){
   
   //Настройка выхода 2 TIM15
   TIM_OCInitStruct.TIM_OCMode = TIM_OCMode_PWM1; //Пин в режиме выхода, переключение по совпадению
-  TIM_OCInitStruct.TIM_OutputState = TIM_OutputState_Disable; //Разрешение выхода (CC2E = 0)
+  TIM_OCInitStruct.TIM_OutputState = TIM_OutputState_Enable; //Разрешение выхода (CC2E = 0)
   TIM_OCInitStruct.TIM_OutputNState = TIM_OutputNState_Disable; //комплиментарный режим запрещен
   TIM_OCInitStruct.TIM_Pulse = 0; //Значение регистра сравнения
   TIM_OCInitStruct.TIM_OCPolarity = TIM_OCPolarity_High;       //Исходное состояние до совпадения
@@ -2857,7 +2858,18 @@ void encoEmulInit(encoBlockStatus *encoBlockPnt){
   //Базовая настройка таймера
   TIM_InternalClockConfig(encoEmulTIM);               //Таймер тактируется от внутреннего источника
   encoEmulStartSettigsSet(encoEmulTIM, encoBlockPnt); //Базовая настройка таймера эмулятора
-  TIM_CtrlPWMOutputs(encoEmulTIM, ENABLE);            //Глобальное разрешение выхода сравнения (MOE = 1)
+  if(BDTRflg == 0){
+    BDTRflg = 1;
+    TIM_CtrlPWMOutputs(encoEmulTIM, ENABLE);            //Глобальное разрешение выхода сравнения (MOE = 1)
+    TIM_BDTRInitStruct.TIM_OSSRState = TIM_OSSRState_Disable;
+    TIM_BDTRInitStruct.TIM_OSSIState = TIM_OSSIState_Enable;
+    TIM_BDTRInitStruct.TIM_LOCKLevel = TIM_LOCKLevel_OFF;
+    TIM_BDTRInitStruct.TIM_DeadTime = 0x00;
+    TIM_BDTRInitStruct.TIM_Break = TIM_Break_Disable;
+    TIM_BDTRInitStruct.TIM_BreakPolarity = TIM_BreakPolarity_Low;
+    TIM_BDTRInitStruct.TIM_AutomaticOutput = TIM_AutomaticOutput_Enable;
+    TIM_BDTRConfig(TIM15, &TIM_BDTRInitStruct);
+  }
 }
 
 /**
@@ -2919,12 +2931,12 @@ void compareRegCalc(float electricSpeed, TIM_TypeDef* TIMx, u32 ARR_val){
   compareVal = (u32)((float)ARR_val / 2 + 0.5F);
   switch(spdSign){
   case POSITIVE_SPD:
-    compare1 = 0;
+    compare1 = compareVal / 2;
     compare2 = compareVal;
     break;
   case NEGATIVE_SPD:
     compare1 = compareVal;
-    compare2 =  0;
+    compare2 = compareVal / 2;
     break;
   }
   TIM_SetCompare1(TIMx, compare1);
@@ -3025,5 +3037,6 @@ void encoEmulStartSettigsSet(TIM_TypeDef* TIMx, encoBlockStatus *encoBlockPnt){
   NVIC_Init(&NVIC_InitStructure);
   
   TIM_ITConfig(TIMx, TIM_IT_CC1, DISABLE); //Прерывания запрещены
+  TIM_ITConfig(TIMx, TIM_IT_CC2, DISABLE); //Прерывания запрещены
 }
 

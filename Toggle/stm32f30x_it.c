@@ -678,6 +678,7 @@ void TIM1_BRK_TIM15_IRQHandler(void)
   s16 spdSign;
   float electricSpeed;
   encoBlockStatus *encoBlockPnt;
+  u16 debug;
   
   encoBlockPnt = &encoBlock;
   electricSpeed = encoBlockPnt->calculatedData.electricSpd;
@@ -703,6 +704,8 @@ void TIM1_BRK_TIM15_IRQHandler(void)
       }
       break;
     }
+  }else if(TIM_GetITStatus(TIM15, TIM_IT_CC2) != RESET){
+    TIM_ClearITPendingBit(TIM15, TIM_IT_CC2);
   }
 }
 
