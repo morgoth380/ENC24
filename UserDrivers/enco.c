@@ -2833,7 +2833,7 @@ void encoEmulInit(encoBlockStatus *encoBlockPnt){
   //Настройка выхода 1 TIM15
   RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM15, ENABLE); //Тактирование таймера 15
   
-  TIM_OCInitStruct.TIM_OCMode = TIM_OCMode_Toggle; //Пин в режиме выхода, переключение по совпадению
+  TIM_OCInitStruct.TIM_OCMode = TIM_OCMode_PWM1; //Пин в режиме выхода, переключение по совпадению
   TIM_OCInitStruct.TIM_OutputState = TIM_OutputState_Disable; //Разрешение выхода (CC1E = 0)
   TIM_OCInitStruct.TIM_OutputNState = TIM_OutputNState_Disable; //комплиментарный режим запрещен
   TIM_OCInitStruct.TIM_Pulse = 0; //Значение регистра сравнения
@@ -2844,7 +2844,7 @@ void encoEmulInit(encoBlockStatus *encoBlockPnt){
   TIM_OC1Init(encoEmulTIM, &TIM_OCInitStruct); //Настройка выхода 1 таймера TIM15
   
   //Настройка выхода 2 TIM15
-  TIM_OCInitStruct.TIM_OCMode = TIM_OCMode_Toggle; //Пин в режиме выхода, переключение по совпадению
+  TIM_OCInitStruct.TIM_OCMode = TIM_OCMode_PWM1; //Пин в режиме выхода, переключение по совпадению
   TIM_OCInitStruct.TIM_OutputState = TIM_OutputState_Disable; //Разрешение выхода (CC2E = 0)
   TIM_OCInitStruct.TIM_OutputNState = TIM_OutputNState_Disable; //комплиментарный режим запрещен
   TIM_OCInitStruct.TIM_Pulse = 0; //Значение регистра сравнения
@@ -3021,9 +3021,9 @@ void encoEmulStartSettigsSet(TIM_TypeDef* TIMx, encoBlockStatus *encoBlockPnt){
   NVIC_InitStructure.NVIC_IRQChannel = TIM1_BRK_TIM15_IRQn; //TIM6_IRQn;
   NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 3;
   NVIC_InitStructure.NVIC_IRQChannelSubPriority = 3;
-  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+  NVIC_InitStructure.NVIC_IRQChannelCmd = DISABLE; //Прерывания запрещены
   NVIC_Init(&NVIC_InitStructure);
   
-  TIM_ITConfig(TIMx, TIM_IT_CC1, ENABLE);
+  TIM_ITConfig(TIMx, TIM_IT_CC1, DISABLE); //Прерывания запрещены
 }
 
