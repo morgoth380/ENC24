@@ -140,6 +140,14 @@ void encoSpdFlt(encoBlockStatus *encoBlockPnt){
     encoBlockPnt->calculatedData.electricSpd = 0;
   }
   
+  if (isnan(encoBlockPnt->K1SpdFiltr)){
+    encoBlockPnt->K1SpdFiltr = 0;
+  }
+  
+  if (isnan(encoBlockPnt->K2SpdFiltr)){
+    encoBlockPnt->K2SpdFiltr = 0;
+  }
+  
   electricSpd = encoBlockPnt->calculatedData.electricSpd;
   shadowSpeedElectric = encoBlockPnt->calculatedData.shadowSpeedElectric;
     
