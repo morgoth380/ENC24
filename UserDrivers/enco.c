@@ -531,6 +531,9 @@ void serialDataProcessing(unsigned long long position, encoBlockStatus *encoBloc
    encoderPosition = getEnDatEncoderPosition(encoBlockPnt, position);
    encoderCRC = getEnDatEncoderCRC(position); 
    crcCalc = EnDatEncoderCRCcalc(encoBlockPnt, encoderPosition, position);
+   if(encoderCRC != crcCalc){
+     crcCalc++;
+   }
    ThetaMechPU = EnDatEncoderMechPosCalc(encoBlockPnt, encoderPosition); //механическоий угол по enDat
    ThetaElec = EnDatEncoderElecPosCalc(encoBlockPnt, ThetaMechPU);       //электрический угол по enDat
    ThetaElec = getActualElectrPhase(ThetaElec, encoBlockPnt);            //электрический угол по enDat
@@ -2918,40 +2921,10 @@ void encoEmulCalc(encoBlockStatus *encoBlockPnt){
   encoEmulMode = encoBlockPnt->encoEmulMode;
 
   if((fabsf(electricSpeed) < minEncoEmulRef) || (encoEmulMode == ENCO_EMUL_OFF)){   //Скорость равна 0 или эмулятор отключен
-    if(firstResetting == 0){
-        firstResetting = 1;
-        TIM_Cmd(TIMx, DISABLE);
-        RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM15, DISABLE); //Тактирование таймера 15
-        /*
-        RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM15, DISABLE); //Тактирование таймера 15
-        RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM15, ENABLE); //Тактирование таймера 15
-        TIM_OCInitStruct.TIM_OCMode = TIM_OCMode_Toggle; //Пин в режиме выхода, переключение по совпадению
-        TIM_OCInitStruct.TIM_OutputState = TIM_OutputState_Enable; //Разрешение выхода (CC1E = 0)
-        TIM_OCInitStruct.TIM_OutputNState = TIM_OutputNState_Disable; //комплиментарный режим запрещен
-        TIM_OCInitStruct.TIM_Pulse = 0; //Значение регистра сравнения
-        TIM_OCInitStruct.TIM_OCPolarity = TIM_OCPolarity_High;       //Исходное состояние до совпадения
-        TIM_OCInitStruct.TIM_OCNPolarity = TIM_OCPolarity_High;     //Исходное состояние до совпадения
-        TIM_OCInitStruct.TIM_OCIdleState = TIM_OCIdleState_Reset;   //Не исп.
-        TIM_OCInitStruct.TIM_OCNIdleState = TIM_OCNIdleState_Reset; //Не исп.
-        TIM_OC1Init(TIMx, &TIM_OCInitStruct); //Настройка выхода 1 таймера TIM15
-        
-        //Настройка выхода 2 TIM15
-        TIM_OCInitStruct.TIM_OCMode = TIM_OCMode_Toggle; //Пин в режиме выхода, переключение по совпадению
-        TIM_OCInitStruct.TIM_OutputState = TIM_OutputState_Enable; //Разрешение выхода (CC2E = 0)
-        TIM_OCInitStruct.TIM_OutputNState = TIM_OutputNState_Disable; //комплиментарный режим запрещен
-        TIM_OCInitStruct.TIM_Pulse = 0; //Значение регистра сравнения
-        TIM_OCInitStruct.TIM_OCPolarity = TIM_OCPolarity_High;       //Исходное состояние до совпадения
-        TIM_OCInitStruct.TIM_OCNPolarity = TIM_OCPolarity_High;     //Исходное состояние до совпадения
-        TIM_OCInitStruct.TIM_OCIdleState = TIM_OCIdleState_Reset;   //Не исп.
-        TIM_OCInitStruct.TIM_OCNIdleState = TIM_OCNIdleState_Reset; //Не исп.
-        TIM_OC2Init(TIMx, &TIM_OCInitStruct); //Настройка выхода 2 таймера TIM15
-     */
-        encoEmulInit(encoBlockPnt);
-        encoEmulStartSettigsSet(TIMx, encoBlockPnt); //Сброс параметров эмулятора
-        skipCnt = 0;
-    }
-    //encoEmulOutputDesable(TIMx);   //Запрет выходов эмулятора
-    
+    ARR_val = MAX_ARR_VAL;
+    TIM_SetAutoreload(TIMx, ARR_val / 2);
+    TIM_SetCompare1(TIMx, ARR_val - 1);
+    TIM_SetCompare2(TIMx, ARR_val - 1);
     return;
   }
   firstResetting = 0;
