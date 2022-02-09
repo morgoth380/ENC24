@@ -119,6 +119,12 @@ void encoBlockPerifInit(encoBlockStatus *encoBlockPnt){
   encoBlockPnt->baseEncoMotorData.blockType = encoBlockTypeDef();
   MCU_TypeDef(encoBlockPnt);  //Считывание ID процессора
   
+  /*Число пар полюсов, равное нулю, означает что данные от CP24
+    еще не поступили*/
+  if(encoBlockPnt->baseEncoMotorData.polePairsNum == 0){
+    return;
+  }
+  
   /*Если данные энкодера изменились, вызываем переинициализацию периферии*/  
   if(memcmp(pntToStaticData, pntToBaseData, baseDataLength)){   
     dataChangePerifReinit(encoBlockPnt);                    //Вызов переиницилизации
